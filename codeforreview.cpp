@@ -1,131 +1,188 @@
-// clang-tidy code.cpp -checks='*, -clang-analyzer-deprecated-*-check' -- -std=c++17 > clang-tidy
-// cppcheck --enable=all --inconclusive --xml-version=2 -v code.cpp > cppcheck
-
 #include <iostream>
+#include <fstream>
 #include <string>
-#include <stdexcept>
 #include <vector>
-#include <memory>
-#include <sstream> // Include this header for std::ostringstream
-#include <map> // Unused include
+#include <iomanip>
 
 using namespace std;
 
-class Person
-{
-private:
-    string _name;
-    string _nickname; // Unused variable
-
+class Student {
 public:
-    string getName() { return _name; }
-    void setName(string name) { _name = name; }
-    Person* Parent; // Possible null pointer dereference risk
-    int Age;
-    int VotingAge = 18;
-    string Blog = "thinqlinq";
+    int id;
+    string name;
+    float gpa;
 
-    /// Determines if the person is old enough to vote
-    bool CanVote(int minAge) 
-    {
-        return Age > 17 ? true : false;
-    }
+    Student() : id(0), name(""), gpa(0.0) {}
 
-    bool IsPrime()
-    {
-        // Inefficient logic and possible out-of-bounds risk
-        int primes[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29};
-        for (int i = 0; i <= 10; i++) // Possible out-of-bounds access
-        {
-            if (primes[i] == Age) { return true; }
-        }
-        return false;
-    }
+    Student(int id, string name, float gpa) : id(id), name(name), gpa(gpa) {}
 
-    bool IsFibber()
-    {
-        // Hardcoded values instead of checking algorithmically
-        return (Age == 2 || Age == 3 || Age == 5 || Age == 8);
-    }
-
-    string SayHello()
-    {
-        string hello = "Hello";
-        for (int i = 0; i < 20; i++)
-        {
-            hello += "Hello"; // Inefficient string concatenation
-        }
-        return hello;
+    void display() const {
+        cout << left << setw(10) << id << setw(20) << name << setw(5) << gpa << endl;
     }
 };
 
-class ToDispose
-{
+class StudentRecord {
 private:
-    std::ostringstream sw;
+    vector<Student> students;
+    string filename;
 
 public:
-    ToDispose() {}
-
-    void Write(string value)
-    {
-        sw << value;
+    StudentRecord(string filename) : filename(filename) {
+        loadFromFile();
     }
 
-    // Missing virtual destructor for a class that could be extended
-};
+    void addStudent(const Student& student) {
+        students.push_back(student);
+        saveToFile();
+    }
 
-class Class1
-{
-public:
-    void ShouldUseVar(string input)
-    {
-        try
-        {
-            if (input.empty())
-                throw invalid_argument("input");
+    void deleteStudent(int id) {
+        auto it = find_if(students.begin(), students.end(),
+                          [id](const Student& s) { return s.id == id; });
+        if (it != students.end()) {
+            students.erase(it);
+            saveToFile();
+            cout << "Student with ID " << id << " deleted successfully." << endl;
+        } else {
+            cout << "Student with ID " << id << " not found." << endl;
+        }
+    }
 
-            // Incorrect use of `Person` by value instead of reference
-            Person person = GetJim();
-            cout << person.getName() << " is " << person.Age << " years old" << endl;
-
-            // Potential null pointer dereference
-            if (person.Parent != nullptr) {  // Check for null pointer
-                cout << "His parent is " << person.Parent->getName() << ", " << person.Parent->Age << endl;
+    void updateStudent(int id, const string& name, float gpa) {
+        for (Student& student : students) {
+            if (student.id == id) {
+                student.name = name;
+                student.gpa = gpa;
+                saveToFile();
+                cout << "Student with ID " << id << " updated successfully." << endl;
+                return;
             }
-
-            cout << "His blog is " << person.Blog << endl;
         }
-        catch (exception& ex)
-        {
-            // Swallowed exception
-            cerr << "Exception: " << ex.what() << endl;
+        cout << "Student with ID " << id << " not found." << endl;
+    }
+
+    void searchStudent(int id) const {
+        for (const Student& student : students) {
+            if (student.id == id) {
+                student.display();
+                return;
+            }
+        }
+        cout << "Student with ID " << id << " not found." << endl;
+    }
+
+    void listAllStudents() const {
+        cout << left << setw(10) << "ID" << setw(20) << "Name" << setw(5) << "GPA" << endl;
+        cout << "----------------------------------------" << endl;
+        for (const Student& student : students) {
+            student.display();
         }
     }
 
-    static void TryUsingDisposableWithoutDisposing()
-    {
-        ToDispose toDispose;
-        toDispose.Write("test");
-        // Resource leak: no disposal of `ToDispose` object
+private:
+    void loadFromFile() {
+        ifstream file(filename);
+        if (!file) {
+            cout << "File not found. Starting with an empty record." << endl;
+            return;
+        }
+        Student student;
+        while (file >> student.id) {
+            file.ignore(); // Ignore the whitespace after ID
+            getline(file, student.name);
+            file >> student.gpa;
+            students.push_back(student);
+        }
+        file.close();
     }
 
-    Person GetJim()
-    {
-        Person person;
-        person.Age = 42;
-        person.setName("John");
-        person.Parent = nullptr; // Potential null dereference later
-        return person;
+    void saveToFile() const {
+        ofstream file(filename);
+        if (!file) {
+            cout << "Error opening file for writing." << endl;
+            return;
+        }
+        for (const Student& student : students) {
+            file << student.id << endl
+                 << student.name << endl
+                 << student.gpa << endl;
+        }
+        file.close();
     }
 };
 
-int main()
-{
-    Class1 class1;
-    class1.ShouldUseVar("test input");
+void displayMenu() {
+    cout << "\n--- Student Record Management System ---" << endl;
+    cout << "1. Add Student" << endl;
+    cout << "2. Delete Student" << endl;
+    cout << "3. Update Student" << endl;
+    cout << "4. Search Student" << endl;
+    cout << "5. List All Students" << endl;
+    cout << "6. Exit" << endl;
+    cout << "Select an option: ";
+}
 
-    Class1::TryUsingDisposableWithoutDisposing();
+int main() {
+    StudentRecord record("students.txt");
+    int choice;
+    do {
+        displayMenu();
+        cin >> choice;
+
+        switch (choice) {
+            case 1: {
+                int id;
+                string name;
+                float gpa;
+                cout << "Enter ID: ";
+                cin >> id;
+                cin.ignore();
+                cout << "Enter Name: ";
+                getline(cin, name);
+                cout << "Enter GPA: ";
+                cin >> gpa;
+                record.addStudent(Student(id, name, gpa));
+                break;
+            }
+            case 2: {
+                int id;
+                cout << "Enter Student ID to delete: ";
+                cin >> id;
+                record.deleteStudent(id);
+                break;
+            }
+            case 3: {
+                int id;
+                string name;
+                float gpa;
+                cout << "Enter Student ID to update: ";
+                cin >> id;
+                cin.ignore();
+                cout << "Enter new Name: ";
+                getline(cin, name);
+                cout << "Enter new GPA: ";
+                cin >> gpa;
+                record.updateStudent(id, name, gpa);
+                break;
+            }
+            case 4: {
+                int id;
+                cout << "Enter Student ID to search: ";
+                cin >> id;
+                record.searchStudent(id);
+                break;
+            }
+            case 5:
+                record.listAllStudents();
+                break;
+            case 6:
+                cout << "Exiting program." << endl;
+                break;
+            default:
+                cout << "Invalid choice. Please try again." << endl;
+                break;
+        }
+    } while (choice != 6);
 
     return 0;
 }
